@@ -8,6 +8,11 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v1.7.0/mapbox-gl.css" rel="stylesheet" />
   <!-- Adding Mapbox JavaScript file -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v1.7.0/mapbox-gl.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.0/mapbox-gl-geocoder.min.js"></script>
+  href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.0/mapbox-gl-geocoder.css"
+
+
+
   <!-- Adding styling info for the map -->
   <style type="text/css">
     body {
@@ -20,27 +25,46 @@
       top: 200px;
       bottom: 0;
       width: 100%;
-    }  </style>
+    }
+
+    #fly {
+      display: block;
+      position: relative;
+      margin: 0px auto;
+      width: 50%;
+      height: 40px;
+      padding: 10px;
+      border: none;
+      border-radius: 3px;
+      font-size: 12px;
+      text-align: center;
+      color: #fff;
+      background: #ee8a65;
+    }
+  </style>
   <!-- Adding styling info for page layout by reading in a CSS file -->
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+
   <h1>Studio Week 3<br> Interactions with Mapbox GL JS </h1>
   <!-- Add multiple pages to web page-->
   <!-- active class displays the grey box around current page-->
   <ul>
-  	<li><a href="index.html" target="_self">Output 1</a></li>
+    <li><a href="index.html" target="_self">Output 1</a></li>
     <li><a class="active" href="mapbox-interaction.html" target="_self">Output 2</a></li>
     <li><a href="mapbox-turfjs.html" target="_self">Output 3</a></li>
   </ul>
   <br>
 
-  <div id="map"></div>
-  <script>
 
+  <div id="map"></div>
+  <br>
+  <button id="fly">Fly</button>
+  <script>
     // Initialize the map
-    mapboxgl.accessToken = '<your access token here>';
+    mapboxgl.accessToken = 'pk.eyJ1IjoiYmlsaW50b2giLCJhIjoiY2tscjduYWk4MWp4ejJxcG0yYWdveWdreCJ9.NzJS_8TqI-w5-FejDuNO5w';
     var map = new mapboxgl.Map({
       container: 'map', // container id
       style: 'mapbox://styles/mapbox/streets-v11', // stylesheet location
@@ -49,18 +73,126 @@
     });
 
     // Add a popup: https://docs.mapbox.com/mapbox-gl-js/example/popup/
+    var popup = new mapboxgl.Popup({
+        closeOnClick: false
+      })
+      .setLngLat([-122.44, 37.76])
+      .setHTML('<h1>Welcome!</h1>')
+      .addTo(map);
 
     // Add pan and zoom controls: https://docs.mapbox.com/mapbox-gl-js/api/#map#addcontrol
+    map.addControl(new mapboxgl.NavigationControl());
 
     // Add a function that flies to a location: https://docs.mapbox.com/mapbox-gl-js/api/#map#flyto
 
+    document.getElementById('fly').addEventListener('click', function() {
+      // Fly to a random location by offsetting the point -74.50, 40
+      // by up to 5 degrees.
+      map.flyTo({
+        center: [
+          -74.5 + (Math.random() - 0.5) * 10,
+          40 + (Math.random() - 0.5) * 10
+        ],
+        essential: true // this animation is considered essential with respect to prefers-reduced-motion
+      });
+    });
     // Add a function that sets pitch (tilt) to 60 and bearing (rotation) to 45: https://docs.mapbox.com/mapbox-gl-js/api/#map#setpitch and https://docs.mapbox.com/mapbox-gl-js/api/#map#setbearing
+    function rotate() {
+      map.easeTo({
+        bearing: 45,
+        pitch: 60,
+        zoom: 11
+      });
+      rotator();
+    }
+    map.on('load', function() {
+      rotate();
+    });
+
 
     // Add a search box: https://docs.mapbox.com/mapbox-gl-js/example/mapbox-gl-geocoder/
+    var marker = new mapboxgl.Marker() // Initialize a new marker
+      .setLngLat([-122.44, 37.76]) // Marker [lng, lat] coordinates
+      .addTo(map); // Add the marker to the map
+
+    var geocoder = new MapboxGeocoder({
+      // Initialize the geocoder
+      accessToken: mapboxgl.accessToken, // Set the access token
+      mapboxgl: mapboxgl, // Set the mapbox-gl instance
+      marker: false, // Do not use the default marker style
+      placeholder: 'Search for places in Berkeley', // Placeholder text for the search bar
+      //bbox: [-122.30937, 37.84214, -122.23715, 37.89838], // Boundary for Berkeley, but can change it for any place of inetrest.
+      proximity: {
+        longitude: -122.44,
+        latitude: 37.76
+      }
+    });
+
+    // Add the geocoder to the map
+    map.addControl(geocoder);
+
+    // After the map style has loaded on the page,
+    // add a source layer and default styling for a single point
+    map.on('load', function() {
+      map.addSource('single-point', {
+        'type': 'geojson',
+        'data': {
+          'type': 'FeatureCollection',
+          'features': []
+        }
+      });
+
+      map.addLayer({
+        'id': 'point',
+        'source': 'single-point',
+        'type': 'circle',
+        'paint': {
+          'circle-radius': 10,
+          'circle-color': '#448ee4'
+        }
+      });
+
+      // Listen for the `result` event from the Geocoder // `result` event is triggered when a user makes a selection
+      //  Add a marker at the result's coordinates
+      geocoder.on('result', function(e) {
+        map.getSource('single-point').setData(e.result.geometry);
+      });
+    });
 
     // Add a geolocation button: https://docs.mapbox.com/mapbox-gl-js/api/#geolocatecontrol
+    class ToggleControl extends mapboxgl.GeolocateControl {
+      _onSuccess(position) {
+        this.map.flyTo({
+          center: [position.coords.longitude, position.coords.latitude],
+          zoom: 11,
+          bearing: 0,
+          pitch: 0
+        });
+      }
 
-    </script>
+      onAdd(map, cs) {
+        this.map = map;
+        this.container = document.createElement('div');
+        this.container.className = `mapboxgl-ctrl`;
+        const button = this._createButton('monitor_button')
+        this.container.appendChild(button);
+        return this.container;
+      }
+
+      _createButton(className) {
+        const el = window.document.createElement('button')
+        el.className = className;
+        el.textContent = 'Use my location';
+        el.addEventListener('click', () => {
+          this.trigger();
+        });
+        this._setup = true;
+        return el;
+      }
+    }
+    const toggleControl = new ToggleControl({})
+    map.addControl(toggleControl, 'top-left')
+  </script>
 
 </body>
 
